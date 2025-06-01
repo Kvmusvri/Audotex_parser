@@ -1,0 +1,8 @@
+# created by virtualenv automatically
+cookies.pkl
+Scripts
+Lib
+static/data
+static/screenshots
+static/svgs
+pyvenv.cfg

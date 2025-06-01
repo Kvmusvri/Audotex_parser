@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты</title>
+    <link rel="stylesheet" href="/static/success.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-wrapper">
+            {% if history %}
+            <h1>История запросов</h1>
+            <a href="/" class="back-button">Назад</a>
+            <div class="search-container">
+                <input type="text" id="history-search" placeholder="Поиск по номеру дела или VIN">
+            </div>
+            <div class="history-buttons">
+                {% for record in history_data %}
+                <button class="history-button" data-record="{{ loop.index }}">{{ record.vin_value or record.claim_number }} ({{ record.created }})</button>
+                {% endfor %}
+            </div>
+            <div class="history-container">
+                {% for record in history_data %}
+                <div class="history-record" id="record-{{ loop.index }}">
+                    <h3>{{ record.vin_value }} ({{ record.created }})</h3>
+                    <div class="history-content">
+                        <div class="content-wrapper">
+                            <div class="left-column">
+                                <div class="sidebar">
+                                    <h2>Детали</h2>
+                                    <div id="details-list-{{ loop.index }}" class="details-list"></div>
+                                </div>
+                                <div class="zones-container">
+                                    <h2>Зоны</h2>
+                                    <div class="zone-row">
+                                        <button class="all-zones-button" data-record="{{ loop.index }}">Все зоны</button>
+                                        <a href="{{ record.main_svg_path }}" download class="svg-download" title="Скачать SVG">
+                                            <span class="download-icon">⬇</span>
+                                        </a>
+                                    </div>
+                                    <div id="zones-table-{{ loop.index }}" class="zones-table">
+                                        {% for zone in record.zone_data %}
+                                        <div class="zone-row">
+                                            <button class="zone-button" data-zone-title="{{ zone.title }}" data-record="{{ loop.index }}">{{ zone.title }}
+                                                {% if zone.has_pictograms %}
+                                                <span class="pictogram-icon">🖼️</span>
+                                                {% endif %}
+                                            </button>
+                                            {% if not zone.graphics_not_available %}
+                                            <a href="{{ zone.svg_path }}" download class="svg-download" title="Скачать SVG">
+                                                <span class="download-icon">⬇</span>
+                                            </a>
+                                            {% endif %}
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="right-column">
+                                <div class="image-container">
+                                    <img id="main-screenshot-{{ loop.index }}" src="{{ record.main_screenshot_path }}" alt="Скриншот зон">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <h1 class="vin-header">{{ vin_value }}</h1>
+            <div class="tabs">
+                <button class="tab-button active" data-tab="results">Результаты</button>
+                <button class="tab-button" onclick="window.location.href='/history'">История</button>
+            </div>
+            <div class="tab-content active" id="results">
+                <div class="content-wrapper">
+                    <div class="left-column">
+                        <div class="sidebar">
+                            <h2>Детали</h2>
+                            <div id="details-list" class="details-list"></div>
+                        </div>
+                        <div class="zones-container">
+                            <h2>Зоны</h2>
+                            <div class="zone-row">
+                                <button class="all-zones-button">Все зоны</button>
+                                <a href="{{ main_svg_path }}" download class="svg-download" title="Скачать SVG">
+                                    <span class="download-icon">⬇</span>
+                                </a>
+                            </div>
+                            {{ zones_table | safe }}
+                        </div>
+                    </div>
+                    <div class="right-column">
+                        <div class="image-container">
+                            <img id="main-screenshot" src="{{ main_screenshot_path }}" alt="Скриншот зон">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <script>
+        {% if history %}
+        // Показ первого заказа по умолчанию
+        const records = document.querySelectorAll('.history-record');
+        const historyButtons = document.querySelectorAll('.history-button');
+        if (records.length > 0) {
+            records[0].classList.add('active');
+            historyButtons[0].classList.add('active');
+        }
+
+        // Поиск по номеру дела или VIN
+        const searchInput = document.getElementById('history-search');
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase();
+            historyButtons.forEach(button => {
+                const text = button.textContent.toLowerCase();
+                button.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+
+        // Переключение заказов
+        historyButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const recordIndex = button.getAttribute('data-record');
+                records.forEach(r => r.classList.remove('active'));
+                historyButtons.forEach(b => b.classList.remove('active'));
+                document.getElementById(`record-${recordIndex}`).classList.add('active');
+                button.classList.add('active');
+            });
+        });
+
+        document.querySelectorAll('.history-record').forEach(record => {
+            const index = record.querySelector('.all-zones-button').getAttribute('data-record');
+            const zoneButtons = record.querySelectorAll(`#zones-table-${index} .zone-button`);
+            const detailsList = record.querySelector(`#details-list-${index}`);
+            const mainScreenshot = record.querySelector(`#main-screenshot-${index}`);
+            const allZonesButton = record.querySelector(`.all-zones-button[data-record="${index}"]`);
+            const zoneData = {{ history_data | tojson }}[index - 1].zone_data;
+
+            allZonesButton.addEventListener('click', () => {
+                zoneButtons.forEach(btn => btn.classList.remove('active'));
+                detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+                mainScreenshot.src = {{ history_data | tojson }}[index - 1].main_screenshot_path;
+                detailsList.innerHTML = '';
+            });
+
+            zoneButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    zoneButtons.forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+
+                    const zoneTitle = button.getAttribute('data-zone-title');
+                    const zone = zoneData.find(z => z.title === zoneTitle);
+
+                    if (zone) {
+                        mainScreenshot.src = zone.screenshot_path;
+
+                        detailsList.innerHTML = '';
+                        if (zone.details && zone.details.length > 0) {
+                            zone.details.forEach(detail => {
+                                const detailButton = document.createElement('div');
+                                detailButton.className = 'detail-button';
+                                detailButton.innerHTML = `
+                                    <a href="${detail.svg_path}" download class="svg-download detail-svg-download" title="Скачать SVG">
+                                        <span class="download-icon">⬇</span>
+                                    </a>
+                                    <span>${detail.title}</span>
+                                `;
+                                detailButton.addEventListener('click', (e) => {
+                                    if (e.target.classList.contains('svg-download') || e.target.classList.contains('download-icon')) return;
+                                    detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+                                    detailButton.classList.add('active');
+                                    mainScreenshot.src = detail.svg_path;
+                                });
+                                detailsList.appendChild(detailButton);
+                            });
+                        }
+                    }
+                });
+            });
+        });
+        {% else %}
+        const zoneData = {{ zone_data_json | safe }};
+        const zoneButtons = document.querySelectorAll('.zone-button');
+        const detailsList = document.getElementById('details-list');
+        const mainScreenshot = document.getElementById('main-screenshot');
+        const allZonesButton = document.querySelector('.all-zones-button');
+
+        allZonesButton.addEventListener('click', () => {
+            zoneButtons.forEach(btn => btn.classList.remove('active'));
+            detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+            mainScreenshot.src = '{{ main_screenshot_path }}';
+            detailsList.innerHTML = '';
+        });
+
+        zoneButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                zoneButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                const zoneTitle = button.getAttribute('data-zone-title');
+                const zone = zoneData.find(z => z.title === zoneTitle);
+
+                if (zone) {
+                    mainScreenshot.src = zone.screenshot_path;
+
+                    detailsList.innerHTML = '';
+                    if (zone.details && zone.details.length > 0) {
+                        zone.details.forEach(detail => {
+                            const detailButton = document.createElement('div');
+                            detailButton.className = 'detail-button';
+                            detailButton.innerHTML = `
+                                <a href="${detail.svg_path}" download class="svg-download detail-svg-download" title="Скачать SVG">
+                                    <span class="download-icon">⬇</span>
+                                </a>
+                                <span>${detail.title}</span>
+                            `;
+                            detailButton.addEventListener('click', (e) => {
+                                if (e.target.classList.contains('svg-download') || e.target.classList.contains('download-icon')) return;
+                                detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+                                detailButton.classList.add('active');
+                                mainScreenshot.src = detail.svg_path;
+                            });
+                            detailsList.appendChild(detailButton);
+                        });
+                    }
+                }
+            });
+        });
+        {% endif %}
+    </script>
+</body>
+</html>

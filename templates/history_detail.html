@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Детали запроса</title>
+    <link rel="stylesheet" href="/static/success.css">
+    <style>
+        .screenshot-container {
+            max-height: 600px; /* Фиксированная высота контейнера */
+            overflow-y: auto; /* Вертикальная прокрутка */
+            border: 1px solid #ccc; /* Для визуальной рамки */
+            width: 100%; /* Полная ширина */
+        }
+        .screenshot-container img {
+            width: 100%; /* Изображение растягивается по ширине */
+            height: auto; /* Сохраняет пропорции */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="form-wrapper">
+            <h1>{{ record.vin_value or record.folder }} ({{ record.created }})</h1>
+            <a href="/history" class="back-button">Назад к истории</a>
+            <div class="content-wrapper">
+                <div class="left-column">
+                    <div class="sidebar wide-sidebar">
+                        <h2>Детали и пиктограммы</h2>
+                        <div id="details-list" class="details-list"></div>
+                    </div>
+                    <div class="zones-container">
+                        <h2>Зоны</h2>
+                        <div class="zone-row">
+                            {% if record.main_svg_path %}
+                            <a href="{{ record.main_svg_path }}" download class="svg-download" title="Скачать SVG">
+                                <span class="download-icon">⬇</span>
+                            </a>
+                            {% endif %}
+                            <button class="all-zones-button" data-record="1">Все зоны</button>
+                        </div>
+                        <div id="zones-table" class="zones-table">
+                            {% for zone in record.zone_data %}
+                            <div class="zone-row">
+                                <button class="zone-button" data-zone-title="{{ zone.title }}" data-record="1">{{ zone.title }}
+                                    {% if zone.has_pictograms %}
+                                    <span class="pictogram-icon">🖼️</span>
+                                    {% endif %}
+                                </button>
+                                {% if not zone.graphics_not_available and zone.svg_path %}
+                                <a href="{{ zone.svg_path }}" download class="svg-download" title="Скачать SVG">
+                                    <span class="download-icon">⬇</span>
+                                </a>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="right-column">
+                    <div class="image-container">
+                        <div class="screenshot-container">
+                            <img id="main-screenshot" src="{{ record.main_screenshot_path }}" alt="Скриншот зон">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Проверка существования файла
+        async function checkFileExists(url) {
+            try {
+                const response = await fetch(url, { method: 'HEAD' });
+                return response.ok;
+            } catch (e) {
+                console.warn(`Файл ${url} недоступен: ${e}`);
+                return false;
+            }
+        }
+
+        const zoneData = {{ record.zone_data | tojson }};
+        const zoneButtons = document.querySelectorAll('.zone-button');
+        const detailsList = document.getElementById('details-list');
+        const mainScreenshot = document.getElementById('main-screenshot');
+        const allZonesButton = document.querySelector('.all-zones-button');
+
+        console.log('Main screenshot path:', {{ record.main_screenshot_path | tojson }});
+        console.log('Zone data:', zoneData);
+
+        allZonesButton.addEventListener('click', async () => {
+            zoneButtons.forEach(btn => btn.classList.remove('active'));
+            detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+            const mainScreenshotPath = {{ record.main_screenshot_path | tojson }};
+            mainScreenshot.src = (await checkFileExists(mainScreenshotPath)) ? mainScreenshotPath : '';
+            detailsList.innerHTML = '';
+        });
+
+        zoneButtons.forEach(button => {
+            button.addEventListener('click', async () => {
+                zoneButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                const zoneTitle = button.getAttribute('data-zone-title');
+                const zone = zoneData.find(z => z.title === zoneTitle);
+
+                if (zone) {
+                    const screenshotPath = zone.screenshot_path || {{ record.main_screenshot_path | tojson }};
+                    mainScreenshot.src = (await checkFileExists(screenshotPath)) ? screenshotPath : '';
+                    console.log('Zone screenshot path:', screenshotPath);
+
+                    detailsList.innerHTML = '';
+
+                    // Добавляем детали
+                    if (zone.details && zone.details.length > 0) {
+                        for (const detail of zone.details) {
+                            const detailRow = document.createElement('div');
+                            detailRow.className = 'detail-row';
+                            detailRow.innerHTML = `
+                                <a href="${detail.svg_path}" download class="svg-download detail-svg-download" title="Скачать SVG">
+                                    <span class="download-icon">⬇</span>
+                                </a>
+                                <button class="detail-button" data-detail-title="${detail.title}">${detail.title}</button>
+                            `;
+                            const detailButton = detailRow.querySelector('.detail-button');
+                            detailButton.addEventListener('click', async () => {
+                                detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+                                detailButton.classList.add('active');
+                                const detailSvgPath = detail.svg_path || zone.screenshot_path;
+                                mainScreenshot.src = (await checkFileExists(detailSvgPath)) ? detailSvgPath : '';
+                                console.log('Detail SVG path:', detailSvgPath);
+                            });
+                            detailsList.appendChild(detailRow);
+                        }
+                    }
+
+                    // Добавляем пиктограммы
+                    if (zone.pictograms && zone.pictograms.length > 0) {
+                        for (const pictogram of zone.pictograms) {
+                            for (const work of pictogram.works) {
+                                const workTitle = work.work_name2 ? `${work.work_name1} (${work.work_name2})` : work.work_name1;
+                                const detailRow = document.createElement('div');
+                                detailRow.className = 'detail-row';
+                                detailRow.innerHTML = `
+                                    <a href="${work.svg_path}" download class="svg-download detail-svg-download" title="Скачать SVG">
+                                        <span class="download-icon">⬇</span>
+                                    </a>
+                                    <button class="detail-button" data-detail-title="${workTitle}">${workTitle}</button>
+                                `;
+                                const detailButton = detailRow.querySelector('.detail-button');
+                                detailButton.addEventListener('click', async () => {
+                                    detailsList.querySelectorAll('.detail-button').forEach(btn => btn.classList.remove('active'));
+                                    detailButton.classList.add('active');
+                                    const workSvgPath = work.svg_path || zone.screenshot_path;
+                                    mainScreenshot.src = (await checkFileExists(workSvgPath)) ? workSvgPath : '';
+                                    console.log('Work SVG path:', workSvgPath);
+                                });
+                                detailsList.appendChild(detailRow);
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

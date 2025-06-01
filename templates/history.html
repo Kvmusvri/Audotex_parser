@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>История запросов</title>
+    <link rel="stylesheet" href="/static/success.css">
+</head>
+<body>
+    <div class="container">
+        <div class="form-wrapper">
+            <h1>История запросов</h1>
+            <a href="/" class="back-button">Назад</a>
+            <div class="search-container">
+                <input type="text" id="history-search" placeholder="Поиск по номеру дела или VIN">
+            </div>
+            <div class="history-buttons">
+                {% for record in history_data %}
+                <a href="/history/{{ record.folder }}" class="history-button">{{ record.vin_value or record.folder }} ({{ record.created }})</a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <script>
+        // Поиск по номеру дела или VIN
+        const searchInput = document.getElementById('history-search');
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toLowerCase();
+            document.querySelectorAll('.history-button').forEach(button => {
+                const text = button.textContent.toLowerCase();
+                button.style.display = text.includes(query) ? 'block' : 'none';
+            });
+        });
+        console.log('History data:', {{ history_data | tojson }});
+    </script>
+</body>
+</html>
